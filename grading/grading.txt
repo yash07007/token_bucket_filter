@@ -1,0 +1,347 @@
+Guideline for Warmup #2
+=======================
+
+Total points: 100
+
++---------------------+
+| General Guidelines: |
++---------------------+
+
+1)  The points below are maximum points.  Partial credits may be given, if
+    appropriate.
+
+2)  Grade what's in the "plus points" section first, then grade the "minus
+    points" to deduct points.
+
+3)  Please read the student's README first to see if you need to do something
+    different to get their code to work and what the known problems are.  The
+    grader must not modify ANY source code and the grader can only grade on a
+    32-bit standard Ubuntu 16.04 system.
+
+4)  The scripts below are for csh/tcsh.  If you use bash, please modify them
+    where necessary.  Or, you can do "tcsh" and then run the scripts.
+
+5)  The grading is meant to be harsh!  In the "plus points" section, if running
+    the "diff" command is suppose to produce no output, but the "diff" command
+    produces some output, most likely, no corresponding plus points will be earned.
+    Again, we cannot grade base of "effort".  Similarly, if running the "diff"
+    command suppose to produce some output, but the "diff" command produces no
+    output or in the wrong format, most likely, no corresponding plus points will
+    be earned.
+
+6)  Unless otherwise specified, the minimum deduction for a mistake of any kind
+    is 0.5 pt (unless you have lost all the points allocated for a particular
+    test/subtest) even if all are caused by the same programming bug.  If a range
+    is specified (e.g., -5 to -10 pts), it means that if such an error occured,
+    even just once, the minimum will be deducted.  From that point on, each
+    additional occurrence will incur a 0.5 pt deduction.
+
+7)  The posted grading guidelines is not perfect.  We will try our best to stick
+    to the grading guidelines.  Sometimes, after we started grading some of the
+    submissions, we realize that we missed something (most often in "minus
+    points").  The bottomline is that we reserve the right to add or change
+    things in the grading guidelines as we see fit (or take additiona deductions
+    if you don't follow the spec).  By default, if the spec says that you are
+    required to implement something, even though it's not explicitly mentioned in
+    the grading guidelines, you must follow the spec.  Please don't assume that
+    it's fine not to follow the spec.  If you are not sure about something, it's
+    best to send an e-mail to the instructor for clarification.
+
+8)  The grader will grade using a different set of "data" (we will try our best
+    not to change the structure of the script).  Any numerical value, commandline
+    argument, or filename is also considered "data".  All these may be changed.
+    So, you need to make sure that your code can handle any input (good and bad).
+
++----------------+
+| Do this first: |
++----------------+
+
+    [ download "w2data.tar.gz" from spec ]
+    gunzip -c w2data.tar.gz | tar xvf -
+    /bin/rm -f section-A.csh section-B.csh analyze-trace.txt
+    /bin/cp w2data/scripts/section-A.csh .
+    /bin/cp w2data/scripts/section-B.csh .
+    /bin/cp w2data/scripts/analyze-trace.txt .
+    chmod 755 *.csh analyze-trace.txt
+
+    make warmup2
+
++--------------+
+| Plus points: |
++--------------+
+
+(A) Basic running of the code : +90 points (+9 points for each run)
+
+                [ the following is similar to running "./section-A.csh" but not exactly the same ]
+
+                rm -f f?.out f?.ana
+                    (for the following tests, if one server is idle for the entire run, deduct 3 pts for that test)
+                    (the total emulation time of the following tests must be at least
+                        26.5 seconds, 23.0 seconds, 13.1 seconds, 16.8 seconds, 18.0 seconds,
+                        20.3 seconds, 14.1 seconds, 15.1 seconds, 15.3 seconds, and 13.4 seconds, respectively)
+                    (if student's program terminates too fast (i.e., less than above number),
+                        it means that either the parameters are not handled correctly or there are
+                        major bugs, deduct 50%)
+                    (if student's program terminates more than 15 seconds beyond the above numbers,
+                        it means that something is not handled correctly, deduct 25%)
+                    (if student's program terminates more than 30 seconds beyond the above numbers,
+                        it means that either the parameters are not handled correctly or there are
+                        major bugs, deduct 50%)
+                ./warmup2 -B 3 -t w2data/f0.txt > f0.out
+                ./warmup2 -t w2data/f1.txt -B 2 > f1.out
+                ./warmup2 -B 1 -t w2data/f2.txt > f2.out
+                ./warmup2 -r 4.5 -t w2data/f3.txt > f3.out
+                ./warmup2 -r 5 -B 2 -t w2data/f4.txt > f4.out
+                ./warmup2 -B 2 -t w2data/f5.txt -r 15 > f5.out
+                ./warmup2 -t w2data/f6.txt -r 25 -B 2 > f6.out
+                ./warmup2 -t w2data/f7.txt -B 1 -r 5 > f7.out
+                ./warmup2 -n 8 -r 3 -B 7 -P 5 -lambda 3.333 -mu 0.5 > f8.out
+                ./warmup2 -mu 0.7 -r 2.5 -P 2 -lambda 2.5 -B 7 -n 15 > f9.out
+
+                ./analyze-trace.txt -B 3 -t w2data/f0.txt f0.out > f0.ana
+                ./analyze-trace.txt -t w2data/f1.txt -B 2 f1.out > f1.ana
+                ./analyze-trace.txt -B 1 -t w2data/f2.txt f2.out > f2.ana
+                ./analyze-trace.txt -r 4.5 -t w2data/f3.txt f3.out > f3.ana
+                ./analyze-trace.txt -r 5 -B 2 -t w2data/f4.txt f4.out > f4.ana
+                ./analyze-trace.txt -B 2 -t w2data/f5.txt -r 15 f5.out > f5.ana
+                ./analyze-trace.txt -t w2data/f6.txt -r 25 -B 2 f6.out > f6.ana
+                ./analyze-trace.txt -t w2data/f7.txt -B 1 -r 5 f7.out > f7.ana
+                ./analyze-trace.txt -n 8 -r 3 -B 7 -P 5 -lambda 3.333 -mu 0.5 f8.out > f8.ana
+                ./analyze-trace.txt -mu 0.7 -r 2.5 -P 2 -lambda 2.5 -B 7 -n 15 f9.out > f9.ana
+
+(B) Basic handling of <Ctrl+C> : +10 points (+1 points for each run)
+
+                    (press <Ctrl+C> 5 seconds after the simulation starts,
+                        no credit if program does not terminate or does not print statistics)
+                    (for these, just see if they basically handle <Ctrl+C> reasonably,
+                        we will check the value of the statistics with minus points later)
+                    (after you press <Ctrl+C>, it's perfectly okay if you see some of your printout
+                        appear after a tcsh/bash prompt; this happens because your tcsh/bash is
+                        sharing the same stdout as your program and there is a race condition)
+                ./warmup2 -B 3 -t w2data/f0.txt
+                ./warmup2 -t w2data/f1.txt -B 2
+                ./warmup2 -B 1 -t w2data/f2.txt
+                ./warmup2 -r 4.5 -t w2data/f3.txt
+                ./warmup2 -r 5 -B 2 -t w2data/f4.txt
+                ./warmup2 -B 2 -t w2data/f5.txt -r 15
+                ./warmup2 -t w2data/f6.txt -r 25 -B 2
+                ./warmup2 -t w2data/f7.txt -B 1 -r 5
+                ./warmup2 -n 8 -r 3 -B 7 -P 5 -lambda 3.333 -mu 0.5
+                ./warmup2 -mu 0.7 -r 2.5 -P 2 -lambda 2.5 -B 7 -n 15
+
++---------------+
+| Minus points: |
++---------------+
+
+Missing/incomplete required section(s) in README file : -5 points (even if lots of comments in code)
+
+Submission in wrong file format : -2 points
+
+Submitted binary file : -2 points each
+
+Cannot compile : -5 to -10, depending on effort to make it work
+                # if cannot generate executable, at least 5 points
+                #     will be taken off, up to 10 points off if it
+                #     takes a lot to make it work
+                # if no Makefile, deduct 10 points
+
+Compiler warnings : -1 to -3
+                # if using gcc/g++, make sure -Wall flag is used
+                #     take 1 point off for 1-4 warnings,
+                # 2 points off for 5-8 warnings, 3 points for more
+
+"make clean" : -2 points if cannot delete all binary files created during compilation
+               (.o files, .gch files, executable files, etc.)
+
+Segmentation faults : -5 to -10 points
+                # if you have seen that the student's program gets segmentation
+                #         faults or bus errors any time during your testing of
+                #         the code, deduct 5 points, any additional occurrance,
+                #         deduct 0.5 pt each
+
+Separate compilation : -10 points
+                # if the executable is compiled with a single line, deduct
+                #     all 10 points
+                # if the source of the executable is a single module, but generates warmup2.o and
+                #     then link to create the executable in line one, deduct 5
+                #     points
+                # if a lot of the code are in .h files, deduct all 10 points
+                # if no Makefile is included in the submission, deduct all 10 points
+
+Delay trace printing : -30 points
+                # if the student's program is not generating trace output
+                #     on-the-fly (i.e., as the program runs), take 30 points off
+                ./warmup2
+
+Using busy-wait : -30 points
+                # (if the student's program is taking up one of the top
+                #     spots in CPU percentages and show high percentages,
+                #     scan student's code and see if it's doing busy-waiting)
+                # (busy-waiting means to wait for variable to change without
+                #     giving up the CPU / going to sleep; it's a big no-no)
+                # (if the student's code is doing busy-waiting, deduct 30 points)
+                ./warmup2 -n 5
+
+Trace output : -40 points
+                # it doesn't matter how well the student's program work with other input, we must use these particular test cases
+                #
+                # run the commands with f1.txt in section (A):
+                ./warmup2 -t w2data/f1.txt -B 2 > f1.out
+                ./analyze-trace.txt -t w2data/f1.txt -B 2 f1.out > f1.ana
+                # (look at the printout in f1.ana and compare it against the trace in f1.out)
+                #
+                # (if the above command freezes or crashes, deduct 10 points and try the command with f2.txt in section (A))
+                # (if the command with f2.txt freezes or crashes, deduct another 10 points and try the command with f4.txt in section (A))
+                # (if the command with f4.txt freezes or crashes, deduct another 20 points and give up)
+    1) Each regular packet must have exactly 7 lines of trace and contain correct information : -35 points
+    2) Each dropped packet must have exactly 1 line of trace and contain correct information : -2 points
+    3) Each token arrival (dropped or not dropped) must have exactly 1 line of trace and contain correct information : -2 points
+    4) Timestamps must be monotonically non-decreasing : -10 points (even if just one timestamp is out of order)
+    5) Timestamps must have microsecond resolution : -20 points
+
+Remove packets : -2 points
+                # it doesn't matter how well the student's program work with other input, we must use this test case
+                ./warmup2 -B 2 -t w2data/f5.txt -r 15
+                # (press <Ctrl+C> 5 seconds after the simulation starts)
+                #       no credit if program does not terminate or does not print statistics)
+                # Each removed packet (due to <Ctrl+C>) must be timestamped and contain correct removal information
+
+Statistics output : -21 points
+                # it doesn't matter how well the student's program work with other input, we must use these test cases
+                ./warmup2 -t w2data/f1.txt -B 2 > f1.out
+                ./analyze-trace.txt -t w2data/f1.txt -B 2 f1.out > f1.ana
+                ./warmup2 -r 4.5 -t w2data/f3.txt > f3.out
+                ./analyze-trace.txt -r 4.5 -t w2data/f3.txt f3.out > f3.ana
+                # (look at the last portion of f1.ana and f3.ana and compare it against
+                #     the statistics in f1.out and f3.out, respectively)
+                # (if for some reason the above 2 commands are not working, deduct 21 points)
+    1) Wrong average inter-arrival time : -3 points
+    2) Wrong average service time : -3 points
+    3) Wrong average number of packets in Q1 : -3 points
+    4) Wrong average number of packets in Q2 : -3 points
+    5) Wrong average number of packets at a server : -3 points
+    6) Wrong average time in system : -3 points
+    7) Wrong standard deviation for time in system : -3 points
+
+Output bad format : -5 points
+                # all timestamps on the left MUST line up
+                # removed packets must be printed before emulation ends and have properly timestamped
+                # it's ok that the output does not look exactly like the sample in spec but must contain same information as the sample in spec
+
+Output wrong precision for statistics (must be 6 or more significant digits) : -3 points
+
+Statistics in wrong units (time related statistics must be in seconds) : -5 points
+
+Large total number of packets test : -5 points
+                # (press <Ctrl+C> after 10 seconds, no need to check statistics)
+                ./warmup2 -n 2147483647
+Large total number of packets with high arrival rate test : -5 points
+                # (press <Ctrl+C> after 5 seconds, no need to check statistics)
+                ./warmup2 -n 2147483647 -lambda 10000 -mu 5000
+Dropped tokens and packets test : -6 points
+                # it doesn't matter how well the student's program work with other input, we must use these test cases
+                # 
+                # (all packets dropped, some tokens are dropped)
+                rm -f test.out
+                ./warmup2 -n 10 -B 1 -mu 0.1 -lambda 2 > test.out
+                ./analyze-trace.txt -n 10 -B 1 -mu 0.1 -lambda 2 test.out
+                # (all packets dropped, slightly lower tokens drop probability than above)
+                rm -f test.out
+                ./warmup2 -n 10 -B 1 -mu 0.1 -lambda 3.5 > test.out
+                ./analyze-trace.txt -n 10 -B 1 -mu 0.1 -lambda 3.5 test.out
+                # (some packets are dropped, no token dropped
+                rm -f test.out
+                ./warmup2 -t w2data/dropped.tfile > test.out
+                ./analyze-trace.txt -t w2data/dropped.tfile test.out
+
+<Ctrl+C> is handled but statistics are way off : -5 points
+                # (if <Ctrl+C> is handled but statistics way off, deduct 5 points)
+                # only deduct points if part (B) score is > 0
+
+Cannot stop (or take too long to stop) packet arrival thread when required : -2 points
+                # when running part (B) tests, if extra packets are generated
+                #     after SIGINT caught message is printed.
+                # only deduct points if part (B) score is > 0
+
+Cannot stop (or take too long to stop) token depositing thread when required : -2 points
+                # when running part (B) tests, if extra tokens are generated
+                #     after all the packets have been created and Q1 became empty or
+                #     after SIGINT caught message is printed.
+                # only deduct points if part (B) score is > 0
+
+Cannot stop (or takes too long to stop) a server thread when required : -2 points
+                # when running part (B) tests, if packets begin transmitting
+                #     after SIGINT caught message is printed.
+                # only deduct points if part (B) score is > 0
+
+Not using condition variables : -20 points
+                # (unfortunately, you need to do visual inspection of their
+                #     code.  Look or grep for "pthread_cond_t" and see if you can
+                #     find out if it's being used.  You don't need to be 100% sure
+                #     that they are doing the right thing.  As long as they seem to
+                #     be doing the right thing, you can give them full credit)
+                # (if semaphore is used instead of mutex, -20 points since
+                #     this project requires doing things the pthread way)
+
+Synchronization check : -20 points
+                # (unfortunately, you need to do visual inspection of their
+                #     code.  Look or grep for "mutex" and see if you can
+                #     find out if they are doing the right thing.  You don't
+                #     need to be 100% sure that they are doing the right thing.
+                #     As long as they seem to be doing the right thing, you can
+                #     give them full credit)
+                # (if semaphore is used instead of mutex, -20 points since
+                #     this project requires doing things the pthread way)
+
+Deadlocks/freezes : -10 points
+                # if student's program freezes (with or without pressing <Ctrl+C>),
+                #     deduct 1 point for each occurrance.
+
+Bad commandline or command or input : -1 point each for each not handling properly
+                # need some sort of error output to indicate that the command
+                #     cannot be completed, it does not have to be exactly the
+                #     error indicated below, but it MUST BE something reasonable
+                #     to inform the user about the error condition
+                # if you print that a commandline is malformed, MUST say which
+                #     argument you think is wrong AND give "usage" information 
+                #     as described in the spec 
+                # please note that commandline parsing is separate from
+                #     other functionalities, so even though a student has
+                #     declared that certain part of the assignments is not
+                #     implemented, commandline parsing still needs to be done
+                #     for those commands
+
+                ./warmup2 -x -y -z
+                    (malformed command, "-x" is not a valid commandline option)
+                ./warmup2 -lambda -n 10
+                    (malformed command, value for "-lambda" is not given)
+                ./warmup2 -mu -n 10
+                    (malformed command, value for "-mu" is not given)
+                ./warmup2 -r -n 10
+                    (malformed command, value for "-r" is not given)
+                ./warmup2 -B -n 10
+                    (malformed command, value for "-B" is not given)
+                ./warmup2 -n
+                    (malformed command, value for "-n" is not given)
+                ./warmup2 -r 5 -mu
+                    (malformed command, value for "-mu" is not given)
+                ./warmup2 -y sort
+                    (malformed command, "-y" is not a valid commandline option)
+                ./warmup2 xyz
+                    (malformed command, "xyz" is not a valid commandline option)
+                ./warmup2 abc def ghi
+                    (malformed command, "abc" is not a valid commandline option)
+                ./warmup2 ksjdfjwiejofjasdfjowkejokjaosijfioejfsiejriwjeirjwier
+                    (malformed command, "ksjdfjwiejofjasdfjowkejokjaosijfioejfsiejriwjeirjwier" is not a valid commandline option)
+                ./warmup2 -t /usr/bin/xyzz
+                    (input file /usr/bin/xyzz does not exist)
+                ./warmup2 -t /var/log/btmp
+                    (input file /var/log/btmp cannot be opened - access denies)
+                ./warmup2 -t /root/.bashrc
+                    (input file /root/.bashrc cannot be opened - access denies)
+                ./warmup2 -t /etc
+                    (input file /etc is a directory or line 1 is not just a number)
+                ./warmup2 -t /etc/lsb-release
+                    (malformed input - line 1 is not just a number)
+                ./warmup2 -t Makefile
+                    (malformed input - line 1 is not just a number)
