@@ -2,11 +2,11 @@ FILES_TO_BACKUP = my402list.c my402list.h warmup1.c warmup1.h
 BACKUP_FNAME = warmup2-backup-`date +%d%b%Y-%H%M%S`.tar.gz
 BACKUP_DIR = $(HOME)/Shared-ubuntu
 
-warmup2: warmup1.o my402list.o
-	gcc -o warmup1 -g warmup1.o my402list.o -lm
+warmup2: warmup2.o my402list.o
+	gcc -o warmup2 -g warmup2.o my402list.o -lpthread
 
-warmup2.o: warmup1.c my402list.h
-	gcc -g -c -Wall warmup1.c
+warmup2.o: warmup2.c my402list.h
+	gcc -g -c -Wall warmup2.c
 
 my402list: my402list.o
 	gcc -o my402list -g my402list.o
