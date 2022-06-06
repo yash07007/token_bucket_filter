@@ -3,9 +3,9 @@
 
 typedef struct Packet {
     int index;
-    int inter_arrival_time; //usec
+    double inter_arrival_time; //usec
     int token_requirement;
-    int service_time; //usec
+    double service_time; //usec
 
     double packet_arrival_time;
     double packet_Q1_in_time;

@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <dirent.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include "cs402.h"
 #include "my402list.h"
@@ -15,7 +16,7 @@
 // program utility variables
 char programName[MAXPATHLENGTH];
 char errorMessage[1024];
-struct timeval timer;
+struct timeval baseTime;
 
 char* options[OPTIONS_LEN] = {};
 int mode;
@@ -42,7 +43,7 @@ pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 My402List Q1;
 My402List Q2;
 My402List eventQ;
-int tokens;
+int TOKENS;
 
 /* utility methods */
 
@@ -176,30 +177,88 @@ void processOptions(int argc, char** argv) {
 
 }
 
+/* returns current relative time (currenttime - basetime) in msec */
+double getCurrentTime() {
+    struct timeval currTime, res;
+    gettimeofday(&currTime, 0);
+    timersub(&currTime, &baseTime, &res);
+    return res.tv_sec * 1000000 + res.tv_usec;
+}
+
+
+/* 
+start
+sleep for next packet to arrive
+lock mutex
+timestamp packet for arrival
+if required packet > bucket size
+    drop packet
+    unlock mutex
+    goto start
+enqueue packet to Q1
+timestamp packet for Q1 start
+unlock mutex
+goto start
+*/
 void* handlePacketArrivalThread(void* arg) {
 
-    printf("In Packet Arrival Thread\n");
-    int packet_arrival_time = gettimeofday(&timer, NULL);
+    double prev_packet_start_time = 0;
+    double prev_packet_end_time = 0;
 
-    // for (My402ListElem* elem = My402ListFirst(eventQ); elem != NULL; elem = My402ListNext(eventQ, elem)) {
+    double curr_packet_start_time;
+    double curr_packet_end_time;
+
+    for (My402ListElem* elem = My402ListFirst(&eventQ); elem != NULL; elem = My402ListNext(&eventQ, elem)) {
         
-    //     Packet* packet = (Packet*) elem->obj;
+        Packet* packet = (Packet*) elem->obj;
 
-    //     packet->packet_arrival_time = packet_arrival_time;
+        double sleepTime = (prev_packet_start_time + packet->inter_arrival_time) - prev_packet_end_time;
+        if(sleepTime > 0) usleep(sleepTime);
 
-    //     int time_to_sleep = packet->packet_arrival_time + packet->inter_arrival_time;
+        pthread_mutex_lock(&mutex);
 
-    //     usleep(time_to_sleep);
+        curr_packet_start_time = getCurrentTime();
+        packet->packet_arrival_time = curr_packet_start_time;
 
-    //     pthread_mutex_lock(&mutex);
+        if(packet->token_requirement > B)
+		{
+			My402ListUnlink(&eventQ, elem);
 
-    //     My402ListAppend(&Q1, (void*) packet);
+			printf(
+                "%012.3fms: packet p%d arrives, needs %d tokens, dropped\n", 
+                packet->packet_arrival_time/1000, packet->index, packet->token_requirement
+            );
 
-    //     pthread_cond_broadcast(&cv);
+            curr_packet_end_time = getCurrentTime();
+            prev_packet_start_time = curr_packet_start_time;
+            prev_packet_end_time = curr_packet_end_time;
 
-    //     pthread_mutex_unlock(&mutex);
+			pthread_mutex_unlock(&mutex);
+			free(packet);
+			continue;
+		}
 
-    // }
+        double mesured_inter_arrival_time = curr_packet_start_time - prev_packet_start_time;
+        printf(
+            "%012.3fms: p%d arrives, needs %d tokens, inter-arrival time = %.3fms\n",
+			packet->packet_arrival_time/1000, packet->index, packet->token_requirement, mesured_inter_arrival_time/1000
+        );
+
+        My402ListAppend(&Q1, (void*) packet);
+        packet->packet_Q1_in_time = getCurrentTime();
+
+        printf(
+            "%012.3fms: p%d enters Q1\n", 
+            packet->packet_Q1_in_time/1000, packet->index
+        );
+
+        curr_packet_end_time = getCurrentTime();
+        prev_packet_start_time = curr_packet_start_time;
+        prev_packet_end_time = curr_packet_end_time;
+        
+        pthread_mutex_unlock(&mutex);
+
+    }
 
 
     return(0);
@@ -207,7 +266,7 @@ void* handlePacketArrivalThread(void* arg) {
 
 void* handleTokenArrivalThread(void* arg) {
 
-    printf("In Token Arrival Thread\n");
+    // double inter_token_arrival_time = timeSecToUsec(1.0/R); // usec (rounded by msec)
 
     return(0);
 }
@@ -241,16 +300,16 @@ FILE* getFileHandler(char* filepath) {
     return F;
 }
 
-int timeSecToUsec(double secs) {
+double timeSecToUsec(double secs) {
     if(secs > 10.0) secs = 10.0;
-    int msec = (int) (secs * 1000);
-    int usec = msec * 1000;
+    double msec = (double)round(secs * 1000);
+    double usec = msec * 1000;
     return usec;
 }
 
-int timeMsecToUsec(int msec) {
+double timeMsecToUsec(int msec) {
     if(msec > 10000) msec = 10000;
-    int usec = msec * 1000;
+    double usec = msec * 1000;
     return usec;
 }
 
@@ -261,9 +320,9 @@ void printList(My402List* list) {
 
         printf("------\n");
         printf("index %d\n", packet->index);
-        printf("inter_arrival_time %d\n", packet->inter_arrival_time);
+        printf("inter_arrival_time %lf\n", packet->inter_arrival_time);
         printf("token_requirement %d\n", packet->token_requirement);
-        printf("service_time %d\n", packet->service_time);
+        printf("service_time %lf\n", packet->service_time);
     }
     
 }
@@ -280,8 +339,8 @@ void setupSimulation() {
 	My402ListInit(&eventQ);
 
     Packet* packet;
-    int inter_arrival_time = 0;
-    int service_time = 0;
+    double inter_arrival_time = 0;
+    double service_time = 0;
     int token_requirement = 0;
 
 
@@ -296,7 +355,7 @@ void setupSimulation() {
             token_requirement = P;
             
             // create packet
-            packet->index = i;
+            packet->index = i + 1;
             packet->inter_arrival_time = inter_arrival_time;
             packet->service_time = service_time;
             packet->token_requirement = token_requirement;
@@ -322,7 +381,7 @@ void setupSimulation() {
 
             if(fgets(line, sizeof(line), F) != NULL) {
 
-                if (sscanf(line, "%d %d %d", &inter_arrival_time, &token_requirement, &service_time) == 3) {
+                if (sscanf(line, "%lf %d %lf", &inter_arrival_time, &token_requirement, &service_time) == 3) {
                     
                     packet = (Packet*) malloc(sizeof(Packet));            
 
@@ -331,7 +390,7 @@ void setupSimulation() {
                     service_time = timeMsecToUsec(service_time);
 
                     // create packet
-                    packet->index = i;
+                    packet->index = i + 1;
                     packet->inter_arrival_time = inter_arrival_time;
                     packet->service_time = service_time;
                     packet->token_requirement = token_requirement;
@@ -357,6 +416,10 @@ void setupSimulation() {
 
 void startSimulation() {
 
+    gettimeofday(&baseTime, 0);
+
+	printf("%012.3fms: emulation begins\n", (double)0);
+
     /* creating worker threads */
 
     pthread_create(&packet_arrival_thread_id, 0, handlePacketArrivalThread, 0);
@@ -378,7 +441,7 @@ int main(int argc, char** argv) {
     if(argc) setProgramName(argv[0]);
     processOptions(argc, argv);
     setupSimulation();
-    // startSimulation();
+    startSimulation();
 
     return 0;
 }
