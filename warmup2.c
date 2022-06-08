@@ -43,7 +43,7 @@ pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 My402List Q1;
 My402List Q2;
 My402List eventQ;
-int TOKENS;
+int TOKENS = 0;
 
 /* utility methods */
 
@@ -185,6 +185,18 @@ double getCurrentTime() {
     return res.tv_sec * 1000000 + res.tv_usec;
 }
 
+double timeSecToUsec(double secs) {
+    if(secs > 10.0) secs = 10.0;
+    double msec = (double)round(secs * 1000);
+    double usec = msec * 1000;
+    return usec;
+}
+
+double timeMsecToUsec(int msec) {
+    if(msec > 10000) msec = 10000;
+    double usec = msec * 1000;
+    return usec;
+}
 
 /* 
 start
@@ -266,7 +278,94 @@ void* handlePacketArrivalThread(void* arg) {
 
 void* handleTokenArrivalThread(void* arg) {
 
-    // double inter_token_arrival_time = timeSecToUsec(1.0/R); // usec (rounded by msec)
+    double inter_token_arrival_time = timeSecToUsec(1.0/R); // usec (rounded by msec)
+
+    double prev_token_start_time = 0;
+    double prev_token_end_time = 0;
+
+    double curr_token_start_time;
+    double curr_token_end_time;
+
+    int index = 0;
+
+	while(TRUE) {
+
+        double token_arrival_time;
+
+        double sleepTime = (prev_token_start_time + inter_token_arrival_time) - prev_token_end_time;
+        if(sleepTime > 0) usleep(sleepTime);
+
+        pthread_mutex_lock(&mutex);
+
+        // if(My402ListEmpty(&eventQ) && My402ListEmpty(&Q1)) {
+        //     if(My402ListEmpty(&Q2))
+        //         pthread_cond_broadcast(&cv);
+
+        //     pthread_mutex_unlock(&mutex);
+        //     break;
+        // }
+
+        curr_token_start_time = getCurrentTime();
+        token_arrival_time = curr_token_start_time;
+
+        if(TOKENS < B) {
+            TOKENS++;
+            printf(
+                "%012.3fms: token t%d arrives, token bucket now has %d token\n", 
+                token_arrival_time/1000, index, TOKENS
+            );
+        }
+        else {
+            printf(
+                "%012.3fms: token t%d arrives, dropped\n", 
+                token_arrival_time/1000, index
+            );
+        }
+
+        if(!My402ListEmpty(&Q1)) {
+            
+            My402ListElem* elem = My402ListFirst(&Q1);
+            Packet* packet = (Packet*)(elem->obj);
+
+    		if(packet->token_requirement == TOKENS) {
+    			
+                TOKENS = 0;
+    			My402ListUnlink(&Q1, elem);
+    			packet->packet_Q1_out_time = getCurrentTime();
+
+                double token_in_Q1_time = packet->packet_Q1_out_time - packet->packet_Q1_in_time;
+    			printf(
+                    "%012.3fms: p%d leaves Q1, time in Q1 = %gms, token bucket now has %d token\n",
+    				packet->packet_Q1_out_time/1000, packet->index, token_in_Q1_time/1000, TOKENS
+                );
+
+
+    			int Q2_empty_before_append = My402ListEmpty(&Q2);
+    			My402ListAppend(&Q2, (void*) packet);
+
+    			packet->packet_Q2_in_time = getCurrentTime();
+
+    			printf(
+                    "%012.3fms: p%d enters Q2\n", 
+                    packet->packet_Q2_in_time/1000, packet->index
+                );
+
+    			if(Q2_empty_before_append) {
+    				pthread_cond_broadcast(&cv);                    
+                }
+
+    		}
+        }
+
+        curr_token_end_time = getCurrentTime();
+        prev_token_start_time = curr_token_start_time;
+        prev_token_end_time = curr_token_end_time;
+
+        pthread_mutex_unlock(&mutex);
+
+        index++;
+
+	}
 
     return(0);
 }
@@ -298,19 +397,6 @@ FILE* getFileHandler(char* filepath) {
         reportError("Unable to open file");
     }
     return F;
-}
-
-double timeSecToUsec(double secs) {
-    if(secs > 10.0) secs = 10.0;
-    double msec = (double)round(secs * 1000);
-    double usec = msec * 1000;
-    return usec;
-}
-
-double timeMsecToUsec(int msec) {
-    if(msec > 10000) msec = 10000;
-    double usec = msec * 1000;
-    return usec;
 }
 
 void printList(My402List* list) {
