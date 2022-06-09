@@ -44,6 +44,12 @@ My402List Q1;
 My402List Q2;
 My402List eventQ;
 int TOKENS = 0;
+double STATISTICS[10] = {0};
+int STAT_TOTAL_PACKETS = 0;
+int STAT_TOTAL_TOKENS = 0;
+int STAT_DROPPED_TOKENS = 0;
+int STAT_DROPPED_PACKETS = 0;
+
 
 /* utility methods */
 
@@ -66,17 +72,6 @@ void usage() {
 void reportError(char* message) {
 	fprintf(stderr,"[Error]: %s\nExiting Program..\n", message);
 	exit(-1);
-}
-
-int getOptionIndex(char* option) {
-    if(!strcmp(option, "-lambda")) return INDEX_OF_LAMBDA;
-    if(!strcmp(option, "-mu")) return INDEX_OF_MU;
-    if(!strcmp(option, "-r")) return INDEX_OF_R;
-    if(!strcmp(option, "-B")) return INDEX_OF_B;
-    if(!strcmp(option, "-P")) return INDEX_OF_P;
-    if(!strcmp(option, "-n")) return INDEX_OF_N;
-    if(!strcmp(option, "-t")) return INDEX_OF_TSFILE;
-    return -1;
 }
 
 double getValidFloat(char* floatStr) {
@@ -120,6 +115,99 @@ int getValidInt(char* intStr) {
 	}
 	
 	return atoi(intStr);
+}
+
+/* returns current relative time (currenttime - basetime) in msec */
+double getCurrentTime() {
+    struct timeval currTime, res;
+    gettimeofday(&currTime, 0);
+    timersub(&currTime, &baseTime, &res);
+    return res.tv_sec * 1000000 + res.tv_usec;
+}
+
+double timeSecToUsec(double secs) {
+    if(secs > 10.0) secs = 10.0;
+    double msec = (double)round(secs * 1000);
+    double usec = msec * 1000;
+    return usec;
+}
+
+double timeMsecToUsec(int msec) {
+    if(msec > 10000) msec = 10000;
+    double usec = msec * 1000;
+    return usec;
+}
+
+double updateAvg(int n, double oldAvg, double point) {
+    return (n * oldAvg + point) / (n + 1);
+}
+
+void updateStatistics(Packet* packet) {
+
+    double time_in_Q1 = packet->packet_Q1_out_time - packet->packet_Q1_in_time;
+    double time_in_Q2 = packet->packet_Q2_out_time - packet->packet_Q2_in_time;
+    double time_in_S = packet->packet_S_out_time - packet->packet_S_in_time;
+    double time_spent_in_system = packet->packet_S_out_time - packet->packet_arrival_time;
+    double total_emulation_time = getCurrentTime();
+
+
+    STATISTICS[AVG_INTER_ARRIVAL_TIME] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_INTER_ARRIVAL_TIME], packet->inter_arrival_time);
+    STATISTICS[AVG_PACKET_SERVICE_TIME] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_PACKET_SERVICE_TIME], packet->service_time);
+    STATISTICS[AVG_NO_OF_PACKET_IN_Q1] = STATISTICS[AVG_NO_OF_PACKET_IN_Q1] + time_in_Q1 / total_emulation_time;
+    STATISTICS[AVG_NO_OF_PACKET_IN_Q2] = STATISTICS[AVG_NO_OF_PACKET_IN_Q2] + time_in_Q2 / total_emulation_time;
+
+    if(packet->processing_server_id == 1) {
+        STATISTICS[AVG_NO_OF_PACKET_AT_S1] = STATISTICS[AVG_NO_OF_PACKET_AT_S1] + time_in_S / total_emulation_time;
+    }
+    else if(packet->processing_server_id == 2) {
+        STATISTICS[AVG_NO_OF_PACKET_AT_S2] = STATISTICS[AVG_NO_OF_PACKET_AT_S2] + time_in_S / total_emulation_time;
+    }
+
+    STATISTICS[AVG_TIME_IN_SYSTEM] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_TIME_IN_SYSTEM], time_spent_in_system);
+
+    STAT_TOTAL_PACKETS += 1;
+
+    return;
+}
+
+FILE* getFileHandler(char* filepath) {
+    FILE* F = fopen(filepath, "r");
+    // check if file is a directory
+    DIR* D = opendir(filepath);
+    if(D != NULL){
+        closedir(D);
+        reportError("Given file path is a directory");
+    }
+    // check if file doesnt exists
+    if(F == NULL) {
+        reportError("Unable to open file");
+    }
+    return F;
+}
+
+void printList(My402List* list) {
+
+    for (My402ListElem* i = My402ListFirst(list); i != NULL; i = My402ListNext(list, i)) {
+        Packet* packet = (Packet*) i->obj;
+
+        printf("------\n");
+        printf("index %d\n", packet->index);
+        printf("inter_arrival_time %lf\n", packet->inter_arrival_time);
+        printf("token_requirement %d\n", packet->token_requirement);
+        printf("service_time %lf\n", packet->service_time);
+    }
+    
+}
+
+int getOptionIndex(char* option) {
+    if(!strcmp(option, "-lambda")) return INDEX_OF_LAMBDA;
+    if(!strcmp(option, "-mu")) return INDEX_OF_MU;
+    if(!strcmp(option, "-r")) return INDEX_OF_R;
+    if(!strcmp(option, "-B")) return INDEX_OF_B;
+    if(!strcmp(option, "-P")) return INDEX_OF_P;
+    if(!strcmp(option, "-n")) return INDEX_OF_N;
+    if(!strcmp(option, "-t")) return INDEX_OF_TSFILE;
+    return -1;
 }
 
 void processOptions(int argc, char** argv) {
@@ -177,41 +265,6 @@ void processOptions(int argc, char** argv) {
 
 }
 
-/* returns current relative time (currenttime - basetime) in msec */
-double getCurrentTime() {
-    struct timeval currTime, res;
-    gettimeofday(&currTime, 0);
-    timersub(&currTime, &baseTime, &res);
-    return res.tv_sec * 1000000 + res.tv_usec;
-}
-
-double timeSecToUsec(double secs) {
-    if(secs > 10.0) secs = 10.0;
-    double msec = (double)round(secs * 1000);
-    double usec = msec * 1000;
-    return usec;
-}
-
-double timeMsecToUsec(int msec) {
-    if(msec > 10000) msec = 10000;
-    double usec = msec * 1000;
-    return usec;
-}
-
-/* 
-start
-sleep for next packet to arrive
-lock mutex
-timestamp packet for arrival
-if required packet > bucket size
-    drop packet
-    unlock mutex
-    goto start
-enqueue packet to Q1
-timestamp packet for Q1 start
-unlock mutex
-goto start
-*/
 void* handlePacketArrivalThread(void* arg) {
 
     double prev_packet_start_time = 0;
@@ -220,8 +273,10 @@ void* handlePacketArrivalThread(void* arg) {
     double curr_packet_start_time;
     double curr_packet_end_time;
 
-    for (My402ListElem* elem = My402ListFirst(&eventQ); elem != NULL; elem = My402ListNext(&eventQ, elem)) {
+    while(TRUE) {
         
+        My402ListElem* elem = My402ListFirst(&eventQ);
+        if(!elem) break;
         Packet* packet = (Packet*) elem->obj;
 
         double sleepTime = (prev_packet_start_time + packet->inter_arrival_time) - prev_packet_end_time;
@@ -232,9 +287,11 @@ void* handlePacketArrivalThread(void* arg) {
         curr_packet_start_time = getCurrentTime();
         packet->packet_arrival_time = curr_packet_start_time;
 
-        if(packet->token_requirement > B)
-		{
+        if(packet->token_requirement > B) {
+
 			My402ListUnlink(&eventQ, elem);
+
+            STAT_DROPPED_PACKETS += 1;
 
 			printf(
                 "%012.3fms: packet p%d arrives, needs %d tokens, dropped\n", 
@@ -264,9 +321,45 @@ void* handlePacketArrivalThread(void* arg) {
             packet->packet_Q1_in_time/1000, packet->index
         );
 
+        if(!My402ListEmpty(&Q1)) {
+            
+            My402ListElem* qHead = My402ListFirst(&Q1);
+            Packet* packet = (Packet*)(qHead->obj);
+
+    		if(packet->token_requirement == TOKENS) {
+    			
+                TOKENS = 0;
+    			My402ListUnlink(&Q1, qHead);
+    			packet->packet_Q1_out_time = getCurrentTime();
+
+                double token_in_Q1_time = packet->packet_Q1_out_time - packet->packet_Q1_in_time;
+    			printf(
+                    "%012.3fms: p%d leaves Q1, time in Q1 = %gms, token bucket now has %d token\n",
+    				packet->packet_Q1_out_time/1000, packet->index, token_in_Q1_time/1000, TOKENS
+                );
+
+    			int Q2_empty_before_append = My402ListEmpty(&Q2);
+    			My402ListAppend(&Q2, (void*) packet);
+
+    			packet->packet_Q2_in_time = getCurrentTime();
+
+    			printf(
+                    "%012.3fms: p%d enters Q2\n", 
+                    packet->packet_Q2_in_time/1000, packet->index
+                );
+
+    			if(Q2_empty_before_append) {
+    				pthread_cond_broadcast(&cv);                    
+                }
+
+    		}
+        }
+
         curr_packet_end_time = getCurrentTime();
         prev_packet_start_time = curr_packet_start_time;
         prev_packet_end_time = curr_packet_end_time;
+
+        My402ListUnlink(&eventQ, elem);
         
         pthread_mutex_unlock(&mutex);
 
@@ -297,13 +390,11 @@ void* handleTokenArrivalThread(void* arg) {
 
         pthread_mutex_lock(&mutex);
 
-        // if(My402ListEmpty(&eventQ) && My402ListEmpty(&Q1)) {
-        //     if(My402ListEmpty(&Q2))
-        //         pthread_cond_broadcast(&cv);
-
-        //     pthread_mutex_unlock(&mutex);
-        //     break;
-        // }
+        if(My402ListEmpty(&eventQ) && My402ListEmpty(&Q1)) {
+            if(My402ListEmpty(&Q2)) pthread_cond_broadcast(&cv);
+            pthread_mutex_unlock(&mutex);
+            break;
+        }
 
         curr_token_start_time = getCurrentTime();
         token_arrival_time = curr_token_start_time;
@@ -316,6 +407,7 @@ void* handleTokenArrivalThread(void* arg) {
             );
         }
         else {
+            STAT_DROPPED_TOKENS++;
             printf(
                 "%012.3fms: token t%d arrives, dropped\n", 
                 token_arrival_time/1000, index
@@ -364,53 +456,55 @@ void* handleTokenArrivalThread(void* arg) {
         pthread_mutex_unlock(&mutex);
 
         index++;
-
+        STAT_TOTAL_PACKETS++;
 	}
 
     return(0);
 }
 
-void* handleServerThread(void* arg) {
+void* handleServerThread(void* server_id) {
 
-    int server = (int) arg;
+	while(TRUE) { 
 
-    if(server == SERVER_A) {
-        printf("In Server A Thread\n");
-    }
-    else if(server == SERVER_B) {
-        printf("In Server B Thread\n");
+	    pthread_mutex_lock(&mutex);
+
+		while(My402ListEmpty(&Q2)) pthread_cond_wait(&cv, &mutex);
+        
+        My402ListElem* elem = My402ListFirst(&Q2);
+        Packet* packet = (Packet*)(elem->obj);
+
+        packet->processing_server_id = (int) server_id + 1;
+
+        My402ListUnlink(&Q2, elem);
+
+        pthread_mutex_unlock(&mutex);
+
+        double currentTime = getCurrentTime();
+        packet->packet_Q2_out_time = currentTime;
+        packet->packet_S_in_time = currentTime;
+
+        double token_in_Q2_time = packet->packet_Q2_out_time - packet->packet_Q2_in_time;
+        printf(
+            "%012.3fms: p%d begin service at S%d, time in Q2 = %.3fms\n",
+            packet->packet_S_in_time/1000, packet->index, packet->processing_server_id, token_in_Q2_time/1000
+        );
+
+        usleep(packet->service_time);
+
+        packet->packet_S_out_time = getCurrentTime();
+
+        double service_time = packet->packet_S_out_time - packet->packet_S_in_time;
+        double time_in_system = packet->packet_S_out_time - packet->packet_arrival_time;
+
+        printf(
+            "%012.3fms: p%d departs from S%d, service time = %.3fms, time in system = %.3fms\n",
+            packet->packet_S_out_time/1000, packet->index, packet->processing_server_id, service_time/1000, time_in_system/1000
+        );
+
+        updateStatistics(packet);
     }
 
     return(0);
-}
-
-FILE* getFileHandler(char* filepath) {
-    FILE* F = fopen(filepath, "r");
-    // check if file is a directory
-    DIR* D = opendir(filepath);
-    if(D != NULL){
-        closedir(D);
-        reportError("Given file path is a directory");
-    }
-    // check if file doesnt exists
-    if(F == NULL) {
-        reportError("Unable to open file");
-    }
-    return F;
-}
-
-void printList(My402List* list) {
-
-    for (My402ListElem* i = My402ListFirst(list); i != NULL; i = My402ListNext(list, i)) {
-        Packet* packet = (Packet*) i->obj;
-
-        printf("------\n");
-        printf("index %d\n", packet->index);
-        printf("inter_arrival_time %lf\n", packet->inter_arrival_time);
-        printf("token_requirement %d\n", packet->token_requirement);
-        printf("service_time %lf\n", packet->service_time);
-    }
-    
 }
 
 void setupSimulation() {
@@ -445,6 +539,13 @@ void setupSimulation() {
             packet->inter_arrival_time = inter_arrival_time;
             packet->service_time = service_time;
             packet->token_requirement = token_requirement;
+            
+            packet->packet_Q1_in_time = 0.0;
+            packet->packet_Q1_out_time = 0.0;
+            packet->packet_Q2_in_time = 0.0;
+            packet->packet_Q2_out_time = 0.0;
+            packet->packet_S_in_time = 0.0;
+            packet->packet_S_out_time = 0.0;
 
             My402ListAppend(&eventQ, (void*)packet);
         }    
@@ -454,7 +555,6 @@ void setupSimulation() {
 
         FILE* F = getFileHandler(TSFILE);
         char line[1024];
-        int N;
 
         if(fgets(line, sizeof(line), F) == NULL) {
             sprintf(errorMessage, "File %s is empty!", TSFILE);
@@ -500,6 +600,27 @@ void setupSimulation() {
 
 }
 
+void displayStatistics() {
+    STATISTICS[TOKEN_DROP_PROBABLITY] = STAT_DROPPED_TOKENS / STAT_TOTAL_TOKENS;
+    STATISTICS[PACKET_DROP_PROBABLITY] = STAT_TOTAL_PACKETS / N;
+
+    printf("\nStatistics:\n");
+	printf("\n\taverage packet inter-arrival time = %.6gs\n", STATISTICS[AVG_INTER_ARRIVAL_TIME]);
+	printf("\n\taverage packet service time = %.6gs\n", STATISTICS[AVG_PACKET_SERVICE_TIME]);
+
+	printf("\n\taverage number of packets in Q1 = %.6g\n", STATISTICS[AVG_NO_OF_PACKET_IN_Q1]);
+	printf("\taverage number of packets in Q2 = %.6g\n", STATISTICS[AVG_NO_OF_PACKET_IN_Q2]);
+	printf("\taverage number of packets in S1 = %.6g\n", STATISTICS[AVG_NO_OF_PACKET_AT_S1]);
+	printf("\taverage number of packets in S2 = %.6g\n", STATISTICS[AVG_NO_OF_PACKET_AT_S2]);
+
+	printf("\n\taverage time a packet spent in system = %.6gs\n", STATISTICS[AVG_TIME_IN_SYSTEM]);
+	printf("\tstandard deviation for time spent in system = %.6g\n", STATISTICS[STD_TIME_IN_SYSTEM]);
+
+	printf("\n\ttoken drop probability = %.6g\n", STATISTICS[TOKEN_DROP_PROBABLITY]);
+	printf("\tpacket drop probability = %.6g\n", STATISTICS[PACKET_DROP_PROBABLITY]);
+    return;
+}
+
 void startSimulation() {
 
     gettimeofday(&baseTime, 0);
@@ -520,6 +641,7 @@ void startSimulation() {
     pthread_join(server_a_thread_id, 0);
     pthread_join(server_b_thread_id, 0);
 
+    displayStatistics();
 }
 
 int main(int argc, char** argv) {
