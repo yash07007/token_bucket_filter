@@ -9,12 +9,12 @@ Replace "(Comments?)" below with the command the grader should use to compile
 your program (it should simply be "make" or "make warmup2"; minor variation is
 also fine).
 
-    To compile your code, the grader should type: (Comments?)
+    To compile your code, the grader should type: make
 
 If you have additional instruction for the grader, replace "(Comments?)" with your
 instruction (or with the word "none" if you don't have additional instructions):
 
-    Additional instructions for building/running this assignment: (Comments?)
+    Additional instructions for building/running this assignment: none
 
 In the above, it may be a good idea to tell the grader how many virtual CPUs to
 use when grading.  The only acceptable number of virtual CPUs are either 1 or 2.
@@ -25,7 +25,7 @@ use when grading.  The only acceptable number of virtual CPUs are either 1 or 2.
 
 Replace each "?" below with a numeric value:
 
-(A) Basic running of the code : ? out of 90 pts
+(A) Basic running of the code : 90 out of 90 pts
 
 (B) Basic handling of <Cntrl+C> : ? out of 10 pts
     (Please note that if you entered 0 for (B) above, it means that you did not
@@ -38,44 +38,44 @@ Replace each "?" below with a numeric value:
 Missing required section(s) in README file : -? pts
 Submission in wrong file format : -? pts
 Submitted binary file : -? pts
-Cannot compile : -? pts
-Compiler warnings : -? pts
-"make clean" : -? pts
-Segmentation faults : -? pts
-Separate compilation : -? pts
+Cannot compile : -0 pts
+Compiler warnings : -0 pts
+"make clean" : -0 pts
+Segmentation faults : -0 pts
+Separate compilation : -0 pts
 
-Delay trace printing : -? pts
-Using busy-wait : -? pts
+Delay trace printing : -0 pts
+Using busy-wait : -0 pts
 Trace output :
-    1) regular packets: -? pts
-    2) dropped packets: -? pts
-    3) token arrival (dropped or not dropped): -? pts
-    4) monotonically non-decreasing timestamps: -? pts
-    5) timestamp resolution: -? pts
+    1) regular packets: -0 pts
+    2) dropped packets: -0 pts
+    3) token arrival (dropped or not dropped): -0 pts
+    4) monotonically non-decreasing timestamps: -0 pts
+    5) timestamp resolution: -0 pts
 Remove packets : -? pts
 Statistics output :
     1) inter-arrival time : -? pts
     2) service time : -? pts
-    3) number of packets in Q1 : -? pts
-    4) number of packets in Q2 : -? pts
-    5) number of packets at a server : -? pts
-    6) time in system : -? pts
-    7) standard deviation for time in system : -? pts
-    8) drop probability : -? pts
+    3) number of packets in Q1 : -0 pts
+    4) number of packets in Q2 : -0 pts
+    5) number of packets at a server : -0 pts
+    6) time in system : -0 pts
+    7) standard deviation for time in system : -0 pts
+    8) drop probability : -0 pts
 Output bad format : -? pts
-Output wrong precision for statistics (must be 6 or more significant digits) : -? pts
-Statistics in wrong units (time related statistics must be in seconds) : -? pts
+Output wrong precision for statistics (must be 6 or more significant digits) : -0 pts
+Statistics in wrong units (time related statistics must be in seconds) : -0 pts
 Large total number of packets test : -? pts
 Large total number of packets with high arrival rate test : -? pts
-Dropped tokens and packets test : -? pts
+Dropped tokens and packets test : -0 pts
 <Ctrl+C> is handled but statistics are way off : -? pts
 Cannot stop (or take too long to stop) packet arrival thread when required : -? pts
 Cannot stop (or take too long to stop) token depositing thread when required : -? pts
 Cannot stop (or takes too long to stop) a server thread when required : -? pts
-Not using condition variables : -? pts
-Synchronization check : -? pts
-Deadlocks/freezes : -? pts
-Bad commandline or command : -? pts
+Not using condition variables : -0 pts
+Synchronization check : -0 pts
+Deadlocks/freezes : -0 pts
+Bad commandline or command : -0 pts
 
 +---------------------------------+
 | BUGS / TESTS TO SKIP (Required) |

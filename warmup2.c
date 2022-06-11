@@ -6,6 +6,8 @@
 #include <dirent.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <math.h>
+#include <errno.h>
 
 #include "cs402.h"
 #include "my402list.h"
@@ -17,6 +19,8 @@
 char programName[MAXPATHLENGTH];
 char errorMessage[1024];
 struct timeval baseTime;
+int debug = 0; 
+extern int errno;
 
 char* options[OPTIONS_LEN] = {};
 int mode;
@@ -44,11 +48,12 @@ My402List Q1;
 My402List Q2;
 My402List eventQ;
 int TOKENS = 0;
-double STATISTICS[10] = {0};
+double STATISTICS[11] = {0};
 int STAT_TOTAL_PACKETS = 0;
 int STAT_TOTAL_TOKENS = 0;
 int STAT_DROPPED_TOKENS = 0;
 int STAT_DROPPED_PACKETS = 0;
+double CHECK = 0;
 
 
 /* utility methods */
@@ -80,7 +85,7 @@ double getValidFloat(char* floatStr) {
 	for (int i = 0; i < strlen(floatStr); i++) {
 		if(!isdigit(floatStr[i])) {
             if(floatStr[i] == '.' && dotParsed == TRUE) { 
-				sprintf(errorMessage, "Invalid float: %s <too many decimal points> (valid: exactly one '.')", floatStr);
+				sprintf(errorMessage, "Invalid float: %s <too many decimal points> (valid: zero or one)", floatStr);
                 reportError(errorMessage);
 			}
 			else if(floatStr[i] == '.' && dotParsed == FALSE) { 
@@ -91,10 +96,6 @@ double getValidFloat(char* floatStr) {
                 reportError(errorMessage);
 			}
 		}
-	}
-	if(dotParsed == 0) {
-        sprintf(errorMessage, "Invalid float: %s <no decimal point> (valid: exactly one '.')", floatStr);
-		reportError(errorMessage);
 	}
 	
 	return atof(floatStr);
@@ -117,7 +118,10 @@ int getValidInt(char* intStr) {
 	return atoi(intStr);
 }
 
-/* returns current relative time (currenttime - basetime) in msec */
+double square(double x) {
+    return x * x;
+}
+
 double getCurrentTime() {
     struct timeval currTime, res;
     gettimeofday(&currTime, 0);
@@ -133,7 +137,6 @@ double timeSecToUsec(double secs) {
 }
 
 double timeMsecToUsec(int msec) {
-    if(msec > 10000) msec = 10000;
     double usec = msec * 1000;
     return usec;
 }
@@ -148,25 +151,23 @@ void updateStatistics(Packet* packet) {
     double time_in_Q2 = packet->packet_Q2_out_time - packet->packet_Q2_in_time;
     double time_in_S = packet->packet_S_out_time - packet->packet_S_in_time;
     double time_spent_in_system = packet->packet_S_out_time - packet->packet_arrival_time;
-    double total_emulation_time = getCurrentTime();
-
 
     STATISTICS[AVG_INTER_ARRIVAL_TIME] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_INTER_ARRIVAL_TIME], packet->inter_arrival_time);
     STATISTICS[AVG_PACKET_SERVICE_TIME] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_PACKET_SERVICE_TIME], packet->service_time);
-    STATISTICS[AVG_NO_OF_PACKET_IN_Q1] = STATISTICS[AVG_NO_OF_PACKET_IN_Q1] + time_in_Q1 / total_emulation_time;
-    STATISTICS[AVG_NO_OF_PACKET_IN_Q2] = STATISTICS[AVG_NO_OF_PACKET_IN_Q2] + time_in_Q2 / total_emulation_time;
+    STATISTICS[AVG_NO_OF_PACKET_IN_Q1] = STATISTICS[AVG_NO_OF_PACKET_IN_Q1] + time_in_Q1; // Normalization while printing
+    STATISTICS[AVG_NO_OF_PACKET_IN_Q2] = STATISTICS[AVG_NO_OF_PACKET_IN_Q2] + time_in_Q2; // Normalization while printing
 
     if(packet->processing_server_id == 1) {
-        STATISTICS[AVG_NO_OF_PACKET_AT_S1] = STATISTICS[AVG_NO_OF_PACKET_AT_S1] + time_in_S / total_emulation_time;
+        STATISTICS[AVG_NO_OF_PACKET_AT_S1] = STATISTICS[AVG_NO_OF_PACKET_AT_S1] + time_in_S; // Normalization while printing
     }
     else if(packet->processing_server_id == 2) {
-        STATISTICS[AVG_NO_OF_PACKET_AT_S2] = STATISTICS[AVG_NO_OF_PACKET_AT_S2] + time_in_S / total_emulation_time;
+        STATISTICS[AVG_NO_OF_PACKET_AT_S2] = STATISTICS[AVG_NO_OF_PACKET_AT_S2] + time_in_S; // Normalization while printing
     }
 
     STATISTICS[AVG_TIME_IN_SYSTEM] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_TIME_IN_SYSTEM], time_spent_in_system);
+    STATISTICS[AVG_TIME_IN_SYSTEM_SQUARE] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_TIME_IN_SYSTEM_SQUARE], square(time_spent_in_system));
 
     STAT_TOTAL_PACKETS += 1;
-
     return;
 }
 
@@ -176,11 +177,12 @@ FILE* getFileHandler(char* filepath) {
     DIR* D = opendir(filepath);
     if(D != NULL){
         closedir(D);
-        reportError("Given file path is a directory");
+        reportError("Error opening file: Given file path is a directory");
     }
     // check if file doesnt exists
     if(F == NULL) {
-        reportError("Unable to open file");
+        sprintf(errorMessage, "Error opening file: %s\n", strerror(errno));
+        reportError(errorMessage);
     }
     return F;
 }
@@ -218,15 +220,15 @@ void processOptions(int argc, char** argv) {
     char* option;
     for (int i = 1; i < argc; i+=2)
     {
-        if(i+1 >= argc || argv[i+1][0] == '-') {
-            usage();
-            sprintf(errorMessage, "Option %s has a missing value", argv[i]);
-            reportError(errorMessage);
-        }
         option = argv[i];
         optionIndex = getOptionIndex(option);
 
         if(optionIndex != -1) {
+            if(i+1 >= argc || argv[i+1][0] == '-') {
+                usage();
+                sprintf(errorMessage, "Option %s has a missing value", argv[i]);
+                reportError(errorMessage);
+            }
             options[optionIndex] = argv[i+1];
         } else {
             usage();
@@ -255,6 +257,7 @@ void processOptions(int argc, char** argv) {
 
     /* print emulation parameters */
 
+    printf("\n");
     printf("Emulation Parameters:\n");
     if(mode == DETERMINISTC_MODE) printf("\tlambda = %g\n", LAMBDA);
     if(mode == DETERMINISTC_MODE) printf("\tmu = %g\n", MU);
@@ -262,10 +265,14 @@ void processOptions(int argc, char** argv) {
     printf("\tB = %d\n", B);
     if(mode == DETERMINISTC_MODE) printf("\tP = %d\n", P);
     if(mode == TRACE_DRIVEN_MODE) printf("\ttsfile = %s\n", TSFILE);
+    printf("\n");
+
 
 }
 
 void* handlePacketArrivalThread(void* arg) {
+
+    if(debug) printf("Packet Arrival Thread Start\n");
 
     double prev_packet_start_time = 0;
     double prev_packet_end_time = 0;
@@ -276,7 +283,10 @@ void* handlePacketArrivalThread(void* arg) {
     while(TRUE) {
         
         My402ListElem* elem = My402ListFirst(&eventQ);
-        if(!elem) break;
+        if(!elem) {
+            if(debug) printf("Packet Arrival Thread Exit\n");    
+            break;
+        }
         Packet* packet = (Packet*) elem->obj;
 
         double sleepTime = (prev_packet_start_time + packet->inter_arrival_time) - prev_packet_end_time;
@@ -287,6 +297,8 @@ void* handlePacketArrivalThread(void* arg) {
         curr_packet_start_time = getCurrentTime();
         packet->packet_arrival_time = curr_packet_start_time;
 
+        double mesured_inter_arrival_time = curr_packet_start_time - prev_packet_start_time;
+
         if(packet->token_requirement > B) {
 
 			My402ListUnlink(&eventQ, elem);
@@ -294,8 +306,8 @@ void* handlePacketArrivalThread(void* arg) {
             STAT_DROPPED_PACKETS += 1;
 
 			printf(
-                "%012.3fms: packet p%d arrives, needs %d tokens, dropped\n", 
-                packet->packet_arrival_time/1000, packet->index, packet->token_requirement
+                "%012.3fms: p%d arrives, needs %d tokens, inter-arrival time = %.3fms, dropped\n", 
+                packet->packet_arrival_time/1000, packet->index, packet->token_requirement, mesured_inter_arrival_time/1000
             );
 
             curr_packet_end_time = getCurrentTime();
@@ -307,7 +319,6 @@ void* handlePacketArrivalThread(void* arg) {
 			continue;
 		}
 
-        double mesured_inter_arrival_time = curr_packet_start_time - prev_packet_start_time;
         printf(
             "%012.3fms: p%d arrives, needs %d tokens, inter-arrival time = %.3fms\n",
 			packet->packet_arrival_time/1000, packet->index, packet->token_requirement, mesured_inter_arrival_time/1000
@@ -321,14 +332,14 @@ void* handlePacketArrivalThread(void* arg) {
             packet->packet_Q1_in_time/1000, packet->index
         );
 
-        if(!My402ListEmpty(&Q1)) {
+        if(My402ListLength(&Q1) == 1) {
             
             My402ListElem* qHead = My402ListFirst(&Q1);
             Packet* packet = (Packet*)(qHead->obj);
 
-    		if(packet->token_requirement == TOKENS) {
+    		if(packet->token_requirement <= TOKENS) {
     			
-                TOKENS = 0;
+                TOKENS -= packet->token_requirement;                
     			My402ListUnlink(&Q1, qHead);
     			packet->packet_Q1_out_time = getCurrentTime();
 
@@ -362,14 +373,14 @@ void* handlePacketArrivalThread(void* arg) {
         My402ListUnlink(&eventQ, elem);
         
         pthread_mutex_unlock(&mutex);
-
     }
-
 
     return(0);
 }
 
 void* handleTokenArrivalThread(void* arg) {
+
+    if(debug) printf("Token Arrival Thread Start\n");
 
     double inter_token_arrival_time = timeSecToUsec(1.0/R); // usec (rounded by msec)
 
@@ -379,7 +390,7 @@ void* handleTokenArrivalThread(void* arg) {
     double curr_token_start_time;
     double curr_token_end_time;
 
-    int index = 0;
+    int index = 1;
 
 	while(TRUE) {
 
@@ -393,6 +404,7 @@ void* handleTokenArrivalThread(void* arg) {
         if(My402ListEmpty(&eventQ) && My402ListEmpty(&Q1)) {
             if(My402ListEmpty(&Q2)) pthread_cond_broadcast(&cv);
             pthread_mutex_unlock(&mutex);
+            if(debug) printf("Token Arrival Thread Exit\n");
             break;
         }
 
@@ -419,9 +431,9 @@ void* handleTokenArrivalThread(void* arg) {
             My402ListElem* elem = My402ListFirst(&Q1);
             Packet* packet = (Packet*)(elem->obj);
 
-    		if(packet->token_requirement == TOKENS) {
+    		if(packet->token_requirement <= TOKENS) {
     			
-                TOKENS = 0;
+                TOKENS -= packet->token_requirement;
     			My402ListUnlink(&Q1, elem);
     			packet->packet_Q1_out_time = getCurrentTime();
 
@@ -456,7 +468,7 @@ void* handleTokenArrivalThread(void* arg) {
         pthread_mutex_unlock(&mutex);
 
         index++;
-        STAT_TOTAL_PACKETS++;
+        STAT_TOTAL_TOKENS++;
 	}
 
     return(0);
@@ -464,11 +476,20 @@ void* handleTokenArrivalThread(void* arg) {
 
 void* handleServerThread(void* server_id) {
 
+    if(debug) printf("Server %d Thread Start\n", (int)server_id + 1);
+
 	while(TRUE) { 
 
 	    pthread_mutex_lock(&mutex);
 
-		while(My402ListEmpty(&Q2)) pthread_cond_wait(&cv, &mutex);
+		while(My402ListEmpty(&Q2)) {
+            if(My402ListEmpty(&eventQ) && My402ListEmpty(&Q1)) {
+                if(debug) printf("Server %d Thread Exit\n", (int)server_id + 1);
+                pthread_mutex_unlock(&mutex);
+                pthread_exit(0);
+            }
+            pthread_cond_wait(&cv, &mutex);
+        }
         
         My402ListElem* elem = My402ListFirst(&Q2);
         Packet* packet = (Packet*)(elem->obj);
@@ -480,13 +501,20 @@ void* handleServerThread(void* server_id) {
         pthread_mutex_unlock(&mutex);
 
         double currentTime = getCurrentTime();
+
         packet->packet_Q2_out_time = currentTime;
+        double token_in_Q2_time = packet->packet_Q2_out_time - packet->packet_Q2_in_time;
+
+        printf(
+            "%012.3fms: p%d leaves Q2, time in Q2 = %.3fms\n",
+            packet->packet_Q2_out_time/1000, packet->index, token_in_Q2_time/1000
+        );
+
         packet->packet_S_in_time = currentTime;
 
-        double token_in_Q2_time = packet->packet_Q2_out_time - packet->packet_Q2_in_time;
         printf(
-            "%012.3fms: p%d begin service at S%d, time in Q2 = %.3fms\n",
-            packet->packet_S_in_time/1000, packet->index, packet->processing_server_id, token_in_Q2_time/1000
+            "%012.3fms: p%d begins service at S%d, requesting %dms of service\n",
+            packet->packet_S_in_time/1000, packet->index, packet->processing_server_id, (int)packet->service_time/1000
         );
 
         usleep(packet->service_time);
@@ -600,24 +628,31 @@ void setupSimulation() {
 
 }
 
-void displayStatistics() {
-    STATISTICS[TOKEN_DROP_PROBABLITY] = STAT_DROPPED_TOKENS / STAT_TOTAL_TOKENS;
-    STATISTICS[PACKET_DROP_PROBABLITY] = STAT_TOTAL_PACKETS / N;
+void displayStatistics(double total_emulation_time) {
+
+    STATISTICS[TOKEN_DROP_PROBABLITY] = (double) STAT_DROPPED_TOKENS / (double) STAT_TOTAL_TOKENS;
+    STATISTICS[PACKET_DROP_PROBABLITY] = (double) STAT_DROPPED_PACKETS / (double) N;
+    STATISTICS[AVG_NO_OF_PACKET_IN_Q1] = STATISTICS[AVG_NO_OF_PACKET_IN_Q1] / total_emulation_time; 
+    STATISTICS[AVG_NO_OF_PACKET_IN_Q2] = STATISTICS[AVG_NO_OF_PACKET_IN_Q2] / total_emulation_time; 
+    STATISTICS[AVG_NO_OF_PACKET_AT_S1] = STATISTICS[AVG_NO_OF_PACKET_AT_S1] / total_emulation_time; 
+    STATISTICS[AVG_NO_OF_PACKET_AT_S2] = STATISTICS[AVG_NO_OF_PACKET_AT_S2] / total_emulation_time; 
+    STATISTICS[STD_TIME_IN_SYSTEM] = sqrt( STATISTICS[AVG_TIME_IN_SYSTEM_SQUARE] - square(STATISTICS[AVG_TIME_IN_SYSTEM]));
 
     printf("\nStatistics:\n");
-	printf("\n\taverage packet inter-arrival time = %.6gs\n", STATISTICS[AVG_INTER_ARRIVAL_TIME]);
-	printf("\n\taverage packet service time = %.6gs\n", STATISTICS[AVG_PACKET_SERVICE_TIME]);
+	printf("\n\taverage packet inter-arrival time = %.7gs\n", STATISTICS[AVG_INTER_ARRIVAL_TIME] / 1000000);
+	printf("\taverage packet service time = %.7gs\n", STATISTICS[AVG_PACKET_SERVICE_TIME] / 1000000);
 
-	printf("\n\taverage number of packets in Q1 = %.6g\n", STATISTICS[AVG_NO_OF_PACKET_IN_Q1]);
-	printf("\taverage number of packets in Q2 = %.6g\n", STATISTICS[AVG_NO_OF_PACKET_IN_Q2]);
-	printf("\taverage number of packets in S1 = %.6g\n", STATISTICS[AVG_NO_OF_PACKET_AT_S1]);
-	printf("\taverage number of packets in S2 = %.6g\n", STATISTICS[AVG_NO_OF_PACKET_AT_S2]);
+	printf("\n\taverage number of packets in Q1 = %.7g\n", STATISTICS[AVG_NO_OF_PACKET_IN_Q1]);
+	printf("\taverage number of packets in Q2 = %.7g\n", STATISTICS[AVG_NO_OF_PACKET_IN_Q2]);
+	printf("\taverage number of packets in S1 = %.7g\n", STATISTICS[AVG_NO_OF_PACKET_AT_S1]);
+	printf("\taverage number of packets in S2 = %.7g\n", STATISTICS[AVG_NO_OF_PACKET_AT_S2]);
 
-	printf("\n\taverage time a packet spent in system = %.6gs\n", STATISTICS[AVG_TIME_IN_SYSTEM]);
-	printf("\tstandard deviation for time spent in system = %.6g\n", STATISTICS[STD_TIME_IN_SYSTEM]);
+	printf("\n\taverage time a packet spent in system = %.7gs\n", STATISTICS[AVG_TIME_IN_SYSTEM] / 1000000);
+	printf("\tstandard deviation for time spent in system = %.7gs\n", STATISTICS[STD_TIME_IN_SYSTEM] / 1000000);
 
-	printf("\n\ttoken drop probability = %.6g\n", STATISTICS[TOKEN_DROP_PROBABLITY]);
-	printf("\tpacket drop probability = %.6g\n", STATISTICS[PACKET_DROP_PROBABLITY]);
+	printf("\n\ttoken drop probability = %.7g\n", STATISTICS[TOKEN_DROP_PROBABLITY]);
+	printf("\tpacket drop probability = %.7g\n", STATISTICS[PACKET_DROP_PROBABLITY]);
+    printf("\n");
     return;
 }
 
@@ -641,7 +676,11 @@ void startSimulation() {
     pthread_join(server_a_thread_id, 0);
     pthread_join(server_b_thread_id, 0);
 
-    displayStatistics();
+    double emulation_ends = getCurrentTime();
+
+    printf("%012.3fms: emulation ends\n", emulation_ends / 1000);
+
+    displayStatistics(emulation_ends);
 }
 
 int main(int argc, char** argv) {

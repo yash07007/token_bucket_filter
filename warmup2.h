@@ -1,6 +1,9 @@
 #ifndef _WARMUP2_H_
 #define _WARMUP2_H_
 
+#include <stdio.h>
+#include "my402list.h"
+
 #ifndef BUFF_LEN
 #define BUFF_LEN 1024
 #endif /* ~BUFF_LEN */
@@ -82,29 +85,58 @@ enum STATS {
     AVG_NO_OF_PACKET_AT_S1,
     AVG_NO_OF_PACKET_AT_S2,
     AVG_TIME_IN_SYSTEM,
+    AVG_TIME_IN_SYSTEM_SQUARE,
     STD_TIME_IN_SYSTEM,
     PACKET_DROP_PROBABLITY,
     TOKEN_DROP_PROBABLITY
 };
 
-int getOptionIndex(char*);
+/* get filename from path */
+void setProgramName(char*);
+/* print valid command visa */
+void usage();
+/* print error message and exit */
+void reportError(char*);
+/* read valid float */
+double getValidFloat(char*);
+/* read valid int */
+int getValidInt(char*);
+/* square double and return */
+double square(double);
+/* get current relative time (current time - program start time) in msec */
+double getCurrentTime();
+/* convert seconds to micro seconds */
+double timeSecToUsec(double);
+/* convert milli seconds to micro seconds */
+double timeMsecToUsec(int);
+/* update running average */
+double updateAvg(int, double, double);
+/* update running statistics */
+void updateStatistics(Packet*);
+/* get valid file handler */
+FILE* getFileHandler(char*);
+/* print list */
+void printList(My402List*);
+/* get index of valid parameter */
+int getOptionIndex(char*);;
+/* read program parameters and update global variables */
 void processOptions(int, char**);
-
+/* create event queue from global parameters */
 void setupSimulation();
+/* start simulation of event queue */
 void startSimulation();
-
 /* 
 start
 sleep for next packet to arrive
 lock mutex
 timestamp packet for arrival
-if required packet > bucket size
+if required tokens for packet > bucket size
     drop packet
     unlock mutex
     goto start
 enqueue packet to Q1
 timestamp packet for Q1 start
-if Q1 is not empty and token bucket has enouch tokens for first element in Q1 
+if Q1 has just one element and token bucket has enouch tokens for first element in Q1 
     use all tokens
     transfer packet form Q1 to Q2
     if Q2 was empty before transfer
@@ -133,9 +165,26 @@ unlock mutex
 goto start
 */
 void* handleTokenArrivalThread(void*);
+/* 
+start
+lock mutex
+if Q2, Q1 and eventQ are empty
+    unlock mutex
+    exit thread
+while Q2 is empty
+    condition wait for cv
+dequeue from Q2
+unlock mutex
+timestamp packet for Q2 out
+timestamp packet in S in
+sleep for service time
+timestamp packet for S out
+update statistics
+*/
 void* handleServerThread(void*);
-
+/* update running statistics */
 void updateStatistics(Packet*);
-void displayStatistics();
+/* display statistics */
+void displayStatistics(double);
 
 #endif /* _WARMUP2_H_ */
