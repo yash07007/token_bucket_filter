@@ -157,7 +157,6 @@ void updateStatistics(Packet* packet) {
     double time_in_S = packet->packet_S_out_time - packet->packet_S_in_time;
     double time_spent_in_system = packet->packet_S_out_time - packet->packet_arrival_time;
 
-    STATISTICS[AVG_INTER_ARRIVAL_TIME] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_INTER_ARRIVAL_TIME], packet->inter_arrival_time);
     STATISTICS[AVG_PACKET_SERVICE_TIME] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_PACKET_SERVICE_TIME], packet->service_time);
     STATISTICS[AVG_NO_OF_PACKET_IN_Q1] = STATISTICS[AVG_NO_OF_PACKET_IN_Q1] + time_in_Q1; // Normalization while printing
     STATISTICS[AVG_NO_OF_PACKET_IN_Q2] = STATISTICS[AVG_NO_OF_PACKET_IN_Q2] + time_in_Q2; // Normalization while printing
@@ -189,7 +188,12 @@ FILE* getFileHandler(char* filepath) {
     }
     // check if file doesnt exists
     if(F == NULL) {
-        sprintf(errorMessage, "Error opening file: %s\n", strerror(errno));
+        if(errno == 20) {
+            sprintf(errorMessage, "Error opening file: Permission Denied\n");
+        }
+        else {
+            sprintf(errorMessage, "Error opening file: %s\n", strerror(errno));
+        }
         reportError(errorMessage);
     }
     return F;
@@ -319,6 +323,7 @@ void* handlePacketArrivalThread(void* arg) {
         packet->packet_arrival_time = curr_packet_start_time;
 
         double mesured_inter_arrival_time = curr_packet_start_time - prev_packet_start_time;
+        STATISTICS[AVG_INTER_ARRIVAL_TIME] += mesured_inter_arrival_time;
 
         if(packet->token_requirement > B) {
 
@@ -366,7 +371,7 @@ void* handlePacketArrivalThread(void* arg) {
 
                 double token_in_Q1_time = packet->packet_Q1_out_time - packet->packet_Q1_in_time;
     			printf(
-                    "%012.3fms: p%d leaves Q1, time in Q1 = %gms, token bucket now has %d token\n",
+                    "%012.3fms: p%d leaves Q1, time in Q1 = %.3fms, token bucket now has %d token\n",
     				packet->packet_Q1_out_time/1000, packet->index, token_in_Q1_time/1000, TOKENS
                 );
 
@@ -471,7 +476,7 @@ void* handleTokenArrivalThread(void* arg) {
 
                 double token_in_Q1_time = packet->packet_Q1_out_time - packet->packet_Q1_in_time;
     			printf(
-                    "%012.3fms: p%d leaves Q1, time in Q1 = %gms, token bucket now has %d token\n",
+                    "%012.3fms: p%d leaves Q1, time in Q1 = %.3fms, token bucket now has %d token\n",
     				packet->packet_Q1_out_time/1000, packet->index, token_in_Q1_time/1000, TOKENS
                 );
 
@@ -520,32 +525,42 @@ void* handleServerThread(void* server_id) {
                 pthread_mutex_unlock(&mutex);
                 pthread_exit(0);
             }
-            else if(STOP_SIGNAL) {
-                while (!My402ListEmpty(&Q1)) {
-                    My402ListElem* elem = My402ListFirst(&Q1);
-                    Packet* packet = (Packet*)(elem->obj);
-                    printf(
-                        "%012.3fms: p%d removed from Q1\n", 
-                        getCurrentTime()/1000, packet->index
-                    );
-                    My402ListUnlink(&Q1, elem);
-                    free(packet);
-                }
-                while (!My402ListEmpty(&Q2)) {
-                    My402ListElem* elem = My402ListFirst(&Q2);
-                    Packet* packet = (Packet*)(elem->obj);
-                    printf(
-                        "%012.3fms: p%d removed from Q2\n", 
-                        getCurrentTime()/1000, packet->index
-                    );
-                    My402ListUnlink(&Q2, elem);
-                    free(packet);
-                }
-                if(debug) printf("Server %d Thread Exit (STOP_SIGNAL)\n", (int)server_id + 1);
-                pthread_mutex_unlock(&mutex);
-                pthread_exit(0);
-            }
             pthread_cond_wait(&cv, &mutex);
+            if(STOP_SIGNAL) {
+                break;
+            }
+        }
+
+        if(STOP_SIGNAL) {
+            while (!My402ListEmpty(&Q1)) {
+                My402ListElem* elem = My402ListFirst(&Q1);
+                Packet* packet = (Packet*)(elem->obj);
+                printf(
+                    "%012.3fms: p%d removed from Q1\n", 
+                    getCurrentTime()/1000, packet->index
+                );
+                My402ListUnlink(&Q1, elem);
+                free(packet);
+            }
+            while (!My402ListEmpty(&Q2)) {
+                My402ListElem* elem = My402ListFirst(&Q2);
+                Packet* packet = (Packet*)(elem->obj);
+                printf(
+                    "%012.3fms: p%d removed from Q2\n", 
+                    getCurrentTime()/1000, packet->index
+                );
+                My402ListUnlink(&Q2, elem);
+                free(packet);
+            }
+            while (!My402ListEmpty(&eventQ)) {
+                My402ListElem* elem = My402ListFirst(&eventQ);
+                Packet* packet = (Packet*)(elem->obj);
+                My402ListUnlink(&eventQ, elem);
+                free(packet);
+            }
+            if(debug) printf("Server %d Thread Exit (STOP_SIGNAL)\n", (int)server_id + 1);
+            pthread_mutex_unlock(&mutex);
+            pthread_exit(0);
         }
         
         My402ListElem* elem = My402ListFirst(&Q2);
@@ -702,6 +717,7 @@ void setupSimulation() {
 
 void displayStatistics(double total_emulation_time) {
 
+    STATISTICS[AVG_INTER_ARRIVAL_TIME] = STATISTICS[AVG_INTER_ARRIVAL_TIME] / (STAT_DROPPED_PACKETS + STAT_TOTAL_PACKETS - 1);
     STATISTICS[TOKEN_DROP_PROBABLITY] = (double) STAT_DROPPED_TOKENS / (double) STAT_TOTAL_TOKENS;
     STATISTICS[PACKET_DROP_PROBABLITY] = (double) STAT_DROPPED_PACKETS / (double) N;
     STATISTICS[AVG_NO_OF_PACKET_IN_Q1] = STATISTICS[AVG_NO_OF_PACKET_IN_Q1] / total_emulation_time; 

@@ -17,6 +17,12 @@ my402list.o: my402list.c my402list.h
 clean:
 	rm -f *.o *.submitted *.csh *.sh *.out warmup2 my402list f* analyze-trace.txt
 
+test:
+	cp w2data/scripts/section-A.csh .
+	cp w2data/scripts/section-B.csh .
+	cp w2data/scripts/analyze-trace.txt .
+	chmod 755 *.csh analyze-trace.txt
+
 backup:
 	tar cvzf $(BACKUP_FNAME) $(FILES_TO_BACKUP)
 	@if [ -d $(BACKUP_DIR)/ ]; then \

@@ -40,11 +40,14 @@
 #define N_INITIAL_VALUE 20
 #endif /* ~N_INITIAL_VALUE */
 
+// all time in usec
 typedef struct Packet {
     int index;
-    double inter_arrival_time; //usec
+    double inter_arrival_time;
+    double mesured_inter_arrival_time;
     int token_requirement;
-    double service_time; //usec
+    double service_time;
+    double mesured_service_time;
 
     double packet_arrival_time;
     double packet_Q1_in_time;
