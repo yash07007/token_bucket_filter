@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <errno.h>
+#include <signal.h>
 
 #include "cs402.h"
 #include "my402list.h"
@@ -24,6 +25,7 @@ extern int errno;
 
 char* options[OPTIONS_LEN] = {};
 int mode;
+int STOP_SIGNAL = 0;
 
 // program parameters
 double LAMBDA = LAMBDA_INITIAL_VALUE;
@@ -34,26 +36,29 @@ int P = P_INITIAL_VALUE;
 int N = N_INITIAL_VALUE;
 char* TSFILE;
 
-// thread identifiers
+// thread variables
 pthread_t packet_arrival_thread_id;
 pthread_t token_arrival_thread_id;
 pthread_t server_a_thread_id;
 pthread_t server_b_thread_id;
+pthread_t signal_handler_thread_id;
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
+sigset_t set;
 
 // program data structures
 My402List Q1;
 My402List Q2;
 My402List eventQ;
 int TOKENS = 0;
+
+// statistics state variables
 double STATISTICS[11] = {0};
 int STAT_TOTAL_PACKETS = 0;
 int STAT_TOTAL_TOKENS = 0;
 int STAT_DROPPED_TOKENS = 0;
 int STAT_DROPPED_PACKETS = 0;
-double CHECK = 0;
 
 
 /* utility methods */
@@ -168,6 +173,9 @@ void updateStatistics(Packet* packet) {
     STATISTICS[AVG_TIME_IN_SYSTEM_SQUARE] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_TIME_IN_SYSTEM_SQUARE], square(time_spent_in_system));
 
     STAT_TOTAL_PACKETS += 1;
+
+    free(packet);
+
     return;
 }
 
@@ -264,15 +272,19 @@ void processOptions(int argc, char** argv) {
     printf("\tr = %g\n", R);
     printf("\tB = %d\n", B);
     if(mode == DETERMINISTC_MODE) printf("\tP = %d\n", P);
+    if(mode == DETERMINISTC_MODE) printf("\tN = %d\n", N);
     if(mode == TRACE_DRIVEN_MODE) printf("\ttsfile = %s\n", TSFILE);
     printf("\n");
 
-
+    // Dirty Fix
+    if(N > 200000) N = 200000;
 }
 
 void* handlePacketArrivalThread(void* arg) {
 
     if(debug) printf("Packet Arrival Thread Start\n");
+
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, 0);
 
     double prev_packet_start_time = 0;
     double prev_packet_end_time = 0;
@@ -290,9 +302,18 @@ void* handlePacketArrivalThread(void* arg) {
         Packet* packet = (Packet*) elem->obj;
 
         double sleepTime = (prev_packet_start_time + packet->inter_arrival_time) - prev_packet_end_time;
+
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, 0);
         if(sleepTime > 0) usleep(sleepTime);
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, 0);
 
         pthread_mutex_lock(&mutex);
+
+        if(STOP_SIGNAL) {
+            pthread_mutex_unlock(&mutex);
+            if(debug) printf("Packet Arrival Thread Exit (STOP SIGNAL)\n");    
+            break;
+        }
 
         curr_packet_start_time = getCurrentTime();
         packet->packet_arrival_time = curr_packet_start_time;
@@ -382,6 +403,8 @@ void* handleTokenArrivalThread(void* arg) {
 
     if(debug) printf("Token Arrival Thread Start\n");
 
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, 0);
+
     double inter_token_arrival_time = timeSecToUsec(1.0/R); // usec (rounded by msec)
 
     double prev_token_start_time = 0;
@@ -397,9 +420,18 @@ void* handleTokenArrivalThread(void* arg) {
         double token_arrival_time;
 
         double sleepTime = (prev_token_start_time + inter_token_arrival_time) - prev_token_end_time;
+
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, 0);
         if(sleepTime > 0) usleep(sleepTime);
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, 0);
 
         pthread_mutex_lock(&mutex);
+
+        if(STOP_SIGNAL) {
+            pthread_mutex_unlock(&mutex);
+            if(debug) printf("Token Arrival Thread Exit (STOP SIGNAL)\n");
+            break;
+        }
 
         if(My402ListEmpty(&eventQ) && My402ListEmpty(&Q1)) {
             if(My402ListEmpty(&Q2)) pthread_cond_broadcast(&cv);
@@ -488,6 +520,31 @@ void* handleServerThread(void* server_id) {
                 pthread_mutex_unlock(&mutex);
                 pthread_exit(0);
             }
+            else if(STOP_SIGNAL) {
+                while (!My402ListEmpty(&Q1)) {
+                    My402ListElem* elem = My402ListFirst(&Q1);
+                    Packet* packet = (Packet*)(elem->obj);
+                    printf(
+                        "%012.3fms: p%d removed from Q1\n", 
+                        getCurrentTime()/1000, packet->index
+                    );
+                    My402ListUnlink(&Q1, elem);
+                    free(packet);
+                }
+                while (!My402ListEmpty(&Q2)) {
+                    My402ListElem* elem = My402ListFirst(&Q2);
+                    Packet* packet = (Packet*)(elem->obj);
+                    printf(
+                        "%012.3fms: p%d removed from Q2\n", 
+                        getCurrentTime()/1000, packet->index
+                    );
+                    My402ListUnlink(&Q2, elem);
+                    free(packet);
+                }
+                if(debug) printf("Server %d Thread Exit (STOP_SIGNAL)\n", (int)server_id + 1);
+                pthread_mutex_unlock(&mutex);
+                pthread_exit(0);
+            }
             pthread_cond_wait(&cv, &mutex);
         }
         
@@ -533,6 +590,21 @@ void* handleServerThread(void* server_id) {
     }
 
     return(0);
+}
+
+void* handleSignalThread(void* arg) {
+    int sig;
+    sigwait(&set, &sig);
+    if(sig == SIGINT) {
+        printf("SIGINT caught, no new packets or tokens will be allowed\n");
+    }
+    pthread_mutex_lock(&mutex);
+    STOP_SIGNAL = 1;
+    pthread_cancel(packet_arrival_thread_id);
+    pthread_cancel(token_arrival_thread_id);
+    pthread_cond_broadcast(&cv);
+    pthread_mutex_unlock(&mutex);
+    return 0;
 }
 
 void setupSimulation() {
@@ -662,12 +734,17 @@ void startSimulation() {
 
 	printf("%012.3fms: emulation begins\n", (double)0);
 
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    sigprocmask(SIG_BLOCK, &set, 0);
+
     /* creating worker threads */
 
     pthread_create(&packet_arrival_thread_id, 0, handlePacketArrivalThread, 0);
     pthread_create(&token_arrival_thread_id, 0, handleTokenArrivalThread, 0);
     pthread_create(&server_a_thread_id, 0, handleServerThread, (void*)SERVER_A);
     pthread_create(&server_b_thread_id, 0, handleServerThread, (void*)SERVER_B);
+    pthread_create(&signal_handler_thread_id, 0, handleSignalThread, 0);
 
     /* joining all threads */
 

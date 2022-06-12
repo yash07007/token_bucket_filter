@@ -15,7 +15,7 @@ my402list.o: my402list.c my402list.h
 	gcc -g -c -Wall my402list.c
 
 clean:
-	rm -f *.o *.submitted *.csh *.sh *.out warmup2 my402list f*
+	rm -f *.o *.submitted *.csh *.sh *.out warmup2 my402list f* analyze-trace.txt
 
 backup:
 	tar cvzf $(BACKUP_FNAME) $(FILES_TO_BACKUP)
