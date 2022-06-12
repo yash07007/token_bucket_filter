@@ -157,7 +157,7 @@ void updateStatistics(Packet* packet) {
     double time_in_S = packet->packet_S_out_time - packet->packet_S_in_time;
     double time_spent_in_system = packet->packet_S_out_time - packet->packet_arrival_time;
 
-    STATISTICS[AVG_PACKET_SERVICE_TIME] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_PACKET_SERVICE_TIME], packet->service_time);
+    STATISTICS[AVG_PACKET_SERVICE_TIME] = updateAvg(STAT_TOTAL_PACKETS, STATISTICS[AVG_PACKET_SERVICE_TIME], packet->mesured_service_time);
     STATISTICS[AVG_NO_OF_PACKET_IN_Q1] = STATISTICS[AVG_NO_OF_PACKET_IN_Q1] + time_in_Q1; // Normalization while printing
     STATISTICS[AVG_NO_OF_PACKET_IN_Q2] = STATISTICS[AVG_NO_OF_PACKET_IN_Q2] + time_in_Q2; // Normalization while printing
 
@@ -593,12 +593,12 @@ void* handleServerThread(void* server_id) {
 
         packet->packet_S_out_time = getCurrentTime();
 
-        double service_time = packet->packet_S_out_time - packet->packet_S_in_time;
+        packet->mesured_service_time = packet->packet_S_out_time - packet->packet_S_in_time;
         double time_in_system = packet->packet_S_out_time - packet->packet_arrival_time;
 
         printf(
             "%012.3fms: p%d departs from S%d, service time = %.3fms, time in system = %.3fms\n",
-            packet->packet_S_out_time/1000, packet->index, packet->processing_server_id, service_time/1000, time_in_system/1000
+            packet->packet_S_out_time/1000, packet->index, packet->processing_server_id, packet->mesured_service_time/1000, time_in_system/1000
         );
 
         updateStatistics(packet);
@@ -717,7 +717,7 @@ void setupSimulation() {
 
 void displayStatistics(double total_emulation_time) {
 
-    STATISTICS[AVG_INTER_ARRIVAL_TIME] = STATISTICS[AVG_INTER_ARRIVAL_TIME] / (STAT_DROPPED_PACKETS + STAT_TOTAL_PACKETS - 1);
+    STATISTICS[AVG_INTER_ARRIVAL_TIME] = STATISTICS[AVG_INTER_ARRIVAL_TIME] / (STAT_DROPPED_PACKETS + STAT_TOTAL_PACKETS);
     STATISTICS[TOKEN_DROP_PROBABLITY] = (double) STAT_DROPPED_TOKENS / (double) STAT_TOTAL_TOKENS;
     STATISTICS[PACKET_DROP_PROBABLITY] = (double) STAT_DROPPED_PACKETS / (double) N;
     STATISTICS[AVG_NO_OF_PACKET_IN_Q1] = STATISTICS[AVG_NO_OF_PACKET_IN_Q1] / total_emulation_time; 

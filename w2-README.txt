@@ -54,8 +54,8 @@ Trace output :
     5) timestamp resolution: -0 pts
 Remove packets : -0 pts
 Statistics output :
-    1) inter-arrival time : -? pts
-    2) service time : -? pts
+    1) inter-arrival time : -0 pts
+    2) service time : -0 pts
     3) number of packets in Q1 : -0 pts
     4) number of packets in Q2 : -0 pts
     5) number of packets at a server : -0 pts
